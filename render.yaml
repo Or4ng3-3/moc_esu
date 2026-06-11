@@ -1,0 +1,12 @@
+# Render 部署配置
+services:
+  - type: web
+    name: moc-esu-backend
+    env: python
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
