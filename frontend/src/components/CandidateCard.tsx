@@ -5,9 +5,10 @@ interface CandidateCardProps {
   candidate: Candidate;
   rank: number;
   onVote: (candidateId: string, event: React.MouseEvent) => void;
+  onAvatarClick: (candidateId: string) => void;
 }
 
-export default function CandidateCard({ candidate, rank, onVote }: CandidateCardProps) {
+export default function CandidateCard({ candidate, rank, onVote, onAvatarClick }: CandidateCardProps) {
   const getRankColor = (rank: number) => {
     switch (rank) {
       case 1: return 'text-yellow-400';
@@ -54,12 +55,19 @@ export default function CandidateCard({ candidate, rank, onVote }: CandidateCard
         {getRankEmoji(rank)}
       </div>
 
-      {/* Avatar */}
-      <div className="flex-shrink-0">
+      {/* Avatar — click to view profile & comments */}
+      <div
+        className="flex-shrink-0 cursor-pointer hover:scale-110 transition-transform"
+        onClick={(e) => {
+          e.stopPropagation();
+          onAvatarClick(candidate.id);
+        }}
+        title={`查看 ${candidate.name} 的详细页面`}
+      >
         <img
           src={candidate.avatar_url}
           alt={candidate.name}
-          className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-gray-600 object-cover"
+          className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-gray-600 object-cover hover:border-orange-500/60 transition-colors"
           onError={(e) => {
             (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(candidate.name)}`;
           }}

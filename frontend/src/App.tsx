@@ -2,25 +2,46 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Leaderboard from "./components/Leaderboard";
 import HistorySidebar from "./components/HistorySidebar";
 import AdminPanel from "./components/AdminPanel";
+import NominationModal from "./components/NominationModal";
+import CandidateDetail from "./components/CandidateDetail";
 import type { Candidate } from "./types";
 import { fetchCandidates, batchVote } from "./api";
 
 function App() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showNomination, setShowNomination] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   // Vote buffer: accumulate clicks, flush as batch every 1s
   const voteBufferRef = useRef<Map<string, number>>(new Map());
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingCountRef = useRef(0); // total buffered votes not yet flushed
 
-  // Check if we're on the admin route
+  // Client-side routing
   useEffect(() => {
-    if (window.location.pathname === "/moc-nyysesbbs") {
+    const path = window.location.pathname;
+    if (path === "/moc-nyysesbbs") {
       setShowAdmin(true);
+    } else if (path.startsWith("/candidate/")) {
+      setDetailId(path.split("/candidate/")[1]);
     }
   }, []);
+
+  const navigateTo = (path: string) => {
+    window.history.pushState({}, "", path);
+    if (path === "/") {
+      setShowAdmin(false);
+      setDetailId(null);
+    } else if (path === "/moc-nyysesbbs") {
+      setShowAdmin(true);
+      setDetailId(null);
+    } else if (path.startsWith("/candidate/")) {
+      setDetailId(path.split("/candidate/")[1]);
+      setShowAdmin(false);
+    }
+  };
 
   const loadCandidates = useCallback(async () => {
     try {
@@ -105,6 +126,16 @@ function App() {
     return () => clearInterval(interval);
   }, [loadCandidates]);
 
+  // ---- Candidate Detail Route ----
+  if (detailId) {
+    return (
+      <CandidateDetail
+        candidateId={detailId}
+        onBack={() => navigateTo("/")}
+      />
+    );
+  }
+
   // ---- Admin Route ----
   if (showAdmin) {
     return (
@@ -114,12 +145,12 @@ function App() {
             <h1 className="text-xl font-bold text-gray-200">
               ⚙️ MOC 恶俗榜 - 管理
             </h1>
-            <a
-              href="/"
+            <button
+              onClick={() => navigateTo("/")}
               className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm transition-colors"
             >
               ← 返回排行榜
-            </a>
+            </button>
           </div>
           <AdminPanel candidates={candidates} onUpdate={loadCandidates} />
         </div>
@@ -138,7 +169,14 @@ function App() {
 
       <div className="relative max-w-4xl mx-auto px-4 py-6 sm:py-10">
         {/* Header */}
-        <header className="text-center mb-6 sm:mb-8">
+        <header className="relative text-center mb-6 sm:mb-8">
+          {/* Nomination button — top right */}
+          <button
+            onClick={() => setShowNomination(true)}
+            className="absolute right-0 top-0 px-3 py-1.5 rounded-lg bg-orange-600/20 border border-orange-600/40 text-orange-300 hover:bg-orange-600/30 text-sm transition-colors"
+          >
+            📝 提名
+          </button>
           <h1 className="text-2xl sm:text-4xl font-extrabold bg-gradient-to-r from-orange-400 via-red-400 to-yellow-400 text-transparent bg-clip-text">
             🔥 MOC 恶俗榜 🔥
           </h1>
@@ -146,6 +184,9 @@ function App() {
             点击卡片即可投票 · 排行榜实时更新 · 票多者居上
           </p>
         </header>
+
+        {/* Nomination Modal */}
+        <NominationModal open={showNomination} onClose={() => setShowNomination(false)} />
 
         {/* Main Content: Leaderboard + Sidebar */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
@@ -168,7 +209,11 @@ function App() {
                 ))}
               </div>
             ) : (
-              <Leaderboard candidates={candidates} onVote={optimisticVote} />
+              <Leaderboard
+                candidates={candidates}
+                onVote={optimisticVote}
+                onAvatarClick={(id) => navigateTo(`/candidate/${id}`)}
+              />
             )}
           </div>
 

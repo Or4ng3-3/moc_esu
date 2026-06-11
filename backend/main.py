@@ -44,6 +44,17 @@ class AdminVerify(BaseModel):
     password: str
 
 
+class SubmissionCreate(BaseModel):
+    name: str
+    avatar_url: str = ""
+    reason: str = ""
+
+
+class CommentCreate(BaseModel):
+    author_name: str = "匿名"
+    content: str
+
+
 # ============ Public API ============
 
 @app.get("/api/candidates")
@@ -125,6 +136,67 @@ async def get_history_winners():
     return rows
 
 
+# ---- Comments ----
+
+@app.get("/api/candidates/{candidate_id}/comments")
+async def get_comments(candidate_id: str):
+    """Get all comments for a candidate, newest first."""
+    rows = fetch_all(
+        "SELECT id, candidate_id, author_name, content, likes, created_at "
+        "FROM comments WHERE candidate_id = %s ORDER BY created_at DESC",
+        (candidate_id,),
+    )
+    return rows
+
+
+@app.post("/api/candidates/{candidate_id}/comments")
+async def add_comment(candidate_id: str, body: CommentCreate):
+    """Add a comment to a candidate."""
+    if not body.content.strip():
+        raise HTTPException(status_code=400, detail="评论不能为空")
+
+    # Verify candidate exists
+    c = fetch_one("SELECT id FROM candidates WHERE id = %s", (candidate_id,))
+    if not c:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    row = fetch_one(
+        "INSERT INTO comments (candidate_id, author_name, content) "
+        "VALUES (%s, %s, %s) "
+        "RETURNING id, candidate_id, author_name, content, likes, created_at",
+        (candidate_id, body.author_name.strip() or "匿名", body.content.strip()),
+    )
+    return row
+
+
+@app.post("/api/comments/{comment_id}/like")
+async def like_comment(comment_id: str):
+    """Like a comment. Atomic increment, no auth required, unlimited."""
+    execute(
+        "UPDATE comments SET likes = likes + 1 WHERE id = %s",
+        (comment_id,),
+    )
+    updated = fetch_one("SELECT likes FROM comments WHERE id = %s", (comment_id,))
+    return {"success": True, "likes": updated["likes"] if updated else 0}
+
+
+@app.post("/api/submissions")
+async def submit_nomination(body: SubmissionCreate):
+    """Public: submit a candidate nomination for admin review."""
+    if not body.name.strip():
+        raise HTTPException(status_code=400, detail="姓名不能为空")
+
+    avatar = body.avatar_url.strip() or ""
+    reason = body.reason.strip() or ""
+    row = fetch_one(
+        "INSERT INTO submission_requests (name, avatar_url, reason) "
+        "VALUES (%s, %s, %s) "
+        "RETURNING id, name, avatar_url, reason, status, created_at",
+        (body.name.strip(), avatar, reason),
+    )
+    return {"success": True, "submission": row}
+
+
 # ============ Admin API ============
 
 @app.post("/api/admin/verify")
@@ -200,6 +272,53 @@ async def admin_get_all_candidates(x_admin_token: str = Header(None)):
         "ORDER BY total_votes DESC"
     )
     return rows
+
+
+# ---- Admin: Submission Review ----
+
+@app.get("/api/admin/submissions")
+async def admin_get_submissions(x_admin_token: str = Header(None)):
+    """Get all pending submissions for admin review."""
+    _check_admin(x_admin_token)
+    rows = fetch_all(
+        "SELECT id, name, avatar_url, reason, status, created_at FROM submission_requests "
+        "WHERE status = 'pending' "
+        "ORDER BY created_at DESC"
+    )
+    return rows
+
+
+@app.post("/api/admin/submissions/{submission_id}/approve")
+async def admin_approve_submission(submission_id: str, x_admin_token: str = Header(None)):
+    """Approve a submission: create candidate + delete the request."""
+    _check_admin(x_admin_token)
+    sub = fetch_one(
+        "SELECT id, name, avatar_url, status FROM submission_requests WHERE id = %s",
+        (submission_id,),
+    )
+    if not sub:
+        raise HTTPException(status_code=404, detail="申请不存在")
+
+    # Create the candidate from the submission
+    avatar = sub["avatar_url"] or f"https://api.dicebear.com/7.x/bottts/svg?seed={sub['name']}"
+    fetch_one(
+        "INSERT INTO candidates (name, avatar_url, total_votes) "
+        "VALUES (%s, %s, 0) "
+        "RETURNING id",
+        (sub["name"], avatar),
+    )
+
+    # Delete the request (resolved)
+    execute("DELETE FROM submission_requests WHERE id = %s", (submission_id,))
+    return {"success": True}
+
+
+@app.delete("/api/admin/submissions/{submission_id}")
+async def admin_reject_submission(submission_id: str, x_admin_token: str = Header(None)):
+    """Reject a submission: delete it without creating a candidate."""
+    _check_admin(x_admin_token)
+    execute("DELETE FROM submission_requests WHERE id = %s", (submission_id,))
+    return {"success": True}
 
 
 if __name__ == "__main__":

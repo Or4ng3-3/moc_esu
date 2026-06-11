@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { Candidate } from '../types';
-import { adminVerify, adminCreateCandidate, adminUpdateCandidate, adminDeleteCandidate } from '../api';
+import type { Candidate, SubmissionRequest } from '../types';
+import {
+  adminVerify, adminCreateCandidate, adminUpdateCandidate, adminDeleteCandidate,
+  adminGetSubmissions, adminApproveSubmission, adminRejectSubmission,
+} from '../api';
 
 interface AdminPanelProps {
   candidates: Candidate[];
@@ -13,6 +16,7 @@ export default function AdminPanel({ candidates, onUpdate }: AdminPanelProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [submissions, setSubmissions] = useState<SubmissionRequest[]>([]);
 
   // Add form
   const [showAdd, setShowAdd] = useState(false);
@@ -26,12 +30,22 @@ export default function AdminPanel({ candidates, onUpdate }: AdminPanelProps) {
   const [editAvatar, setEditAvatar] = useState('');
   const [editVotes, setEditVotes] = useState(0);
 
+  const loadSubmissions = useCallback(async (t: string) => {
+    try {
+      const data = await adminGetSubmissions(t);
+      setSubmissions(data);
+    } catch {
+      // not critical
+    }
+  }, []);
+
   const handleLogin = async () => {
     setLoading(true);
     setError('');
     try {
       const res = await adminVerify(password);
       setToken(res.token);
+      loadSubmissions(res.token);
     } catch {
       setError('无权访问');
     } finally {
@@ -43,6 +57,28 @@ export default function AdminPanel({ candidates, onUpdate }: AdminPanelProps) {
     setToken(null);
     setPassword('');
     setError('');
+    setSubmissions([]);
+  };
+
+  const handleApprove = async (id: string) => {
+    if (!token) return;
+    try {
+      await adminApproveSubmission(token, id);
+      setSubmissions((prev) => prev.filter((s) => s.id !== id));
+      onUpdate(); // refresh candidate list
+    } catch (err) {
+      console.error('Approve failed:', err);
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    if (!token) return;
+    try {
+      await adminRejectSubmission(token, id);
+      setSubmissions((prev) => prev.filter((s) => s.id !== id));
+    } catch (err) {
+      console.error('Reject failed:', err);
+    }
   };
 
   const handleAdd = async () => {
@@ -202,6 +238,60 @@ export default function AdminPanel({ candidates, onUpdate }: AdminPanelProps) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Submission Review Section */}
+      {submissions.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-base font-bold text-yellow-400 flex items-center gap-2">
+            📋 待审批提名 ({submissions.length})
+          </h3>
+          {submissions.map((s) => (
+            <div
+              key={s.id}
+              className="bg-gray-800/60 border border-yellow-700/30 rounded-xl p-4"
+            >
+              <div className="flex items-start gap-3">
+                {/* Preview avatar */}
+                {s.avatar_url && (
+                  <img
+                    src={s.avatar_url}
+                    alt={s.name}
+                    className="w-10 h-10 rounded-full border border-gray-600 flex-shrink-0"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-medium text-gray-200">{s.name}</span>
+                    <span className="text-xs text-gray-500">
+                      {new Date(s.created_at).toLocaleDateString('zh-CN')}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-400 whitespace-pre-wrap">
+                    {s.reason || '无理由'}
+                  </p>
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => handleApprove(s.id)}
+                    className="px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs font-medium transition-colors"
+                  >
+                    ✅ 通过
+                  </button>
+                  <button
+                    onClick={() => handleReject(s.id)}
+                    className="px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-600 text-white text-xs font-medium transition-colors"
+                  >
+                    ❌ 拒绝
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Candidate Management List */}
       <div className="space-y-2">

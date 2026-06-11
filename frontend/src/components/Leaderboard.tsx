@@ -7,6 +7,7 @@ import type { Candidate } from '../types';
 interface LeaderboardProps {
   candidates: Candidate[];
   onVote: (candidateId: string) => void;
+  onAvatarClick: (candidateId: string) => void;
 }
 
 interface FloatingVoteData {
@@ -15,7 +16,7 @@ interface FloatingVoteData {
   y: number;
 }
 
-export default function Leaderboard({ candidates, onVote }: LeaderboardProps) {
+export default function Leaderboard({ candidates, onVote, onAvatarClick }: LeaderboardProps) {
   const [floatingVotes, setFloatingVotes] = useState<FloatingVoteData[]>([]);
 
   const handleVote = useCallback((candidateId: string, event: React.MouseEvent) => {
@@ -50,6 +51,7 @@ export default function Leaderboard({ candidates, onVote }: LeaderboardProps) {
             candidate={candidate}
             rank={index + 1}
             onVote={handleVote}
+            onAvatarClick={onAvatarClick}
           />
         ))}
       </AnimatePresence>

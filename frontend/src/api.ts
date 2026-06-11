@@ -1,4 +1,4 @@
-import type { Candidate, DailyWinner } from './types';
+import type { Candidate, DailyWinner, SubmissionRequest, Comment } from './types';
 
 // In dev, Vite proxy handles /api → localhost:8000
 // In production, set VITE_API_URL to your backend URL, e.g. https://moc-esu.onrender.com/api
@@ -76,4 +76,68 @@ export async function adminDeleteCandidate(token: string, id: string): Promise<v
     headers: { 'X-Admin-Token': token },
   });
   if (!res.ok) throw new Error('Failed to delete');
+}
+
+// ---- Submissions ----
+
+export async function submitNomination(name: string, avatarUrl?: string, reason?: string): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/submissions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, avatar_url: avatarUrl || '', reason: reason || '' }),
+  });
+  if (!res.ok) throw new Error('Failed to submit nomination');
+  return res.json();
+}
+
+export async function adminGetSubmissions(token: string): Promise<SubmissionRequest[]> {
+  const res = await fetch(`${API_BASE}/admin/submissions`, {
+    headers: { 'X-Admin-Token': token },
+  });
+  if (!res.ok) throw new Error('Failed to fetch submissions');
+  return res.json();
+}
+
+export async function adminApproveSubmission(token: string, id: string): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/admin/submissions/${id}/approve`, {
+    method: 'POST',
+    headers: { 'X-Admin-Token': token },
+  });
+  if (!res.ok) throw new Error('Failed to approve');
+  return res.json();
+}
+
+export async function adminRejectSubmission(token: string, id: string): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/admin/submissions/${id}`, {
+    method: 'DELETE',
+    headers: { 'X-Admin-Token': token },
+  });
+  if (!res.ok) throw new Error('Failed to reject');
+  return res.json();
+}
+
+// ---- Comments ----
+
+export async function fetchComments(candidateId: string): Promise<Comment[]> {
+  const res = await fetch(`${API_BASE}/candidates/${candidateId}/comments`);
+  if (!res.ok) throw new Error('Failed to fetch comments');
+  return res.json();
+}
+
+export async function addComment(candidateId: string, content: string, authorName?: string): Promise<Comment> {
+  const res = await fetch(`${API_BASE}/candidates/${candidateId}/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content, author_name: authorName || '匿名' }),
+  });
+  if (!res.ok) throw new Error('Failed to add comment');
+  return res.json();
+}
+
+export async function likeComment(commentId: string): Promise<{ success: boolean; likes: number }> {
+  const res = await fetch(`${API_BASE}/comments/${commentId}/like`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error('Failed to like');
+  return res.json();
 }

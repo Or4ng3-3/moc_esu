@@ -77,6 +77,31 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================================
+-- 表 4: submission_requests (用户提名申请)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS submission_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    avatar_url TEXT DEFAULT '',
+    reason TEXT DEFAULT '',
+    status VARCHAR(20) DEFAULT 'pending',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- 表 5: comments (用户评论)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS comments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    candidate_id UUID NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+    author_name VARCHAR(255) NOT NULL DEFAULT '匿名',
+    content TEXT NOT NULL,
+    likes INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_comments_candidate ON comments(candidate_id);
+
+-- ============================================================
 -- 插入示例数据 (可选)
 -- ============================================================
 INSERT INTO candidates (name, avatar_url, total_votes) VALUES
